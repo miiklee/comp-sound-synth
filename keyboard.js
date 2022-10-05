@@ -64,11 +64,12 @@ document.addEventListener("DOMContentLoaded", function(event) {
             playNote(key, currGain);
         }
     }
-
+    var decay = document.getElementById("decay").value;
     function keyUp(event) {
         const key = (event.detail || event.which).toString();
         if (keyboardFrequencyMap[key] && activeOscillators[key]) {
-            activeGains[key].gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.7) //envelope release
+            decay = document.getElementById("decay").value;
+            activeGains[key].gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + decay) //envelope release
             activeOscillators[key].stop(audioCtx.currentTime + 1); //actually stop oscillator
             delete activeOscillators[key];
             delete activeGains[key];
@@ -80,16 +81,17 @@ document.addEventListener("DOMContentLoaded", function(event) {
     function playNote(key, currGain) {
         const osc = audioCtx.createOscillator();
         osc.frequency.setValueAtTime(keyboardFrequencyMap[key], audioCtx.currentTime);
-        osc.type = document.getElementById('waveform').value; //choose your favorite waveform
+        osc.type = document.getElementById('waveform1').value; //choose your favorite waveform
         const gainNode = audioCtx.createGain();
         gainNode.gain.value = 0
         osc.connect(gainNode).connect(globalGain); //new gain node for each node to control the adsr of that note
         activeOscillators[key] = osc
         activeGains[key] = gainNode
-        osc.start();
-        gainNode.gain.setTargetAtTime(currGain, audioCtx.currentTime, .2) //envelope attack
-        funTime()
-
+        osc.start();        
+        var attack = document.getElementById("attack").value;
+        gainNode.gain.setTargetAtTime(currGain, audioCtx.currentTime, attack/5) //envelope attack
+        var sustain = currGain/(1/document.getElementById("sustain").value);
+        //gainNode.gain.setTargetAtTime(0, audioCtx.currentTime + attack, decay/5) //sustain
     }
 
 
