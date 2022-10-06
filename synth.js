@@ -33,14 +33,32 @@ document.addEventListener("DOMContentLoaded", function(event) {
         '48': 1244.51, //0 - D#
         '80': 1318.51, //P - E
     }
+
+    const timeMap = {
+        "0" : 0.01,
+        "1" : 0.1,
+        "2" : 0.2,
+        "3" : 0.4,
+        "4" : 0.6,
+        "5" : 0.8,
+        "6" : 1,
+        "7" : 2.5,
+        "8" : 5,
+        "9" : 7.5,
+        "10" : 10.0,
+    }
     
     window.addEventListener('keydown', keyDown, false);
     window.addEventListener('keyup', keyUp, false);
     //attack in playNote, release in keyDown, sustain established by length of time key held for, decay is 0
-    activeOscillators = {}
-    activeGains = {}
+    var activeOscillators = {}
+    var activeGains = {}
+    var partials = {}
+    var lfos = {}
     var activeNotes = 0.0
     var currGain = 1.0
+    var color = 0;
+    var red = true;
 
 
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -60,7 +78,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
             if (activeNotes > 1.0){ //decrease amplitude of all existing notes to make room for new one
                 for (let i = 0; i < sparseKeys.length; i++){
                     if(synthType == "add"){
-                        activeGains[sparseKeys[i]].gain.setTargetAtTime(currGain/4, audioCtx.currentTime, 1);
+                        activeGains[sparseKeys[i]].gain.setTargetAtTime(currGain/3, audioCtx.currentTime, 1);
                     }
                     else if(synthType == "am"){
                         activeGains[sparseKeys[i]].gain.setTargetAtTime(currGain/2, audioCtx.currentTime, 1);
@@ -78,8 +96,11 @@ document.addEventListener("DOMContentLoaded", function(event) {
     function keyUp(event) {
         const key = (event.detail || event.which).toString();
         if (keyboardFrequencyMap[key] && activeOscillators[key]) {
-            activeGains[key].gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.7) //envelope release
+            var decay = timeMap[document.getElementById('decay').value];
+            activeGains[key].gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + decay) //envelope release
             activeOscillators[key].stop(audioCtx.currentTime + 1); //actually stop oscillator
+            lfos[key].stop(audioCtx.currentTime + 1);
+            delete lfos[key];
             synthEnd(key);
             delete activeOscillators[key];
             delete activeGains[key];
@@ -87,7 +108,6 @@ document.addEventListener("DOMContentLoaded", function(event) {
         }
     }
 
-    var partials = {};
 
     function synthEnd(key){
         if (partials[key]){
@@ -98,39 +118,36 @@ document.addEventListener("DOMContentLoaded", function(event) {
         }
     }
 
-    function additive(waveform, gainNode, currGain, key, osc){
-        //additive synthesis for a variable number of partials
-        var part1 = audioCtx.createOscillator();
+    function additive(gainNode, currGain, key, osc, attack, decay, sustain){
         var part2 = audioCtx.createOscillator();
         var part3 = audioCtx.createOscillator();
     
-        part1.frequency.value = 400;
-        part2.frequency.value = 800;
-        part3.frequency.value = 1200;
+        part2.frequency.value = osc.frequency.value * document.getElementById('frequency2').value;
+        part3.frequency.value = osc.frequency.value * document.getElementById('frequency3').value;
 
-        part1.type = waveform;
-        part2.type = waveform;
-        part3.type = waveform;
+        part2.type = document.getElementById('waveform2').value;
+        part3.type = document.getElementById('waveform3').value;
 
-        part1.connect(gainNode); //new gain node for each note to control the adsr of that note
         part2.connect(gainNode);
         part2.connect(gainNode);
-        partials[key] = [part1, part2, part3]
+        partials[key] = [part2, part3]
         
-        part1.start()
         part2.start()
         part3.start()
 
         osc.connect(gainNode).connect(globalGain); //new gain node for each note to control the adsr of that note
         osc.start();
-        gainNode.gain.setTargetAtTime(currGain/4, audioCtx.currentTime, .2) //envelope attack
+
+        gainNode.gain.setTargetAtTime(currGain/3, audioCtx.currentTime, attack) //envelope attack
+
+        gainNode.gain.setTargetAtTime((currGain/3)*sustain, audioCtx.currentTime + attack, decay) //sustain
     }
 
 
-   function am(waveform, gainNode, currGain, key, osc){
+   function am(gainNode, currGain, key, osc, attack, decay, sustain){
         mf = audioCtx.createOscillator()
         mf.frequency.value = 101 //why not
-        mf.type = waveform
+        mf.type = document.getElementById('waveform2').value;
 
         const mod = audioCtx.createGain()
         const depth = audioCtx.createGain()
@@ -145,14 +162,15 @@ document.addEventListener("DOMContentLoaded", function(event) {
         partials[key] = [mf]
         osc.start();
         mf.start()
-        gainNode.gain.setTargetAtTime(currGain/2, audioCtx.currentTime, .2) //envelope attack
+        gainNode.gain.setTargetAtTime(currGain/2, audioCtx.currentTime, attack) //envelope attack
 
+        gainNode.gain.setTargetAtTime((currGain/2)*sustain, audioCtx.currentTime + attack, decay)
     }
 
-    function fm(waveform, gainNode, currGain, key, osc){
+    function fm(gainNode, currGain, key, osc, attack, decay, systain){
         mf = audioCtx.createOscillator()
-        mf.frequency.value = 101 //why not
-        mf.type = waveform
+        mf.frequency.value = osc.frequency.value * document.getElementById('frequency2').value
+        mf.type = document.getElementById('waveform2').value;
 
         var mod = audioCtx.createGain()
         mod.gain.value = 101
@@ -165,30 +183,55 @@ document.addEventListener("DOMContentLoaded", function(event) {
         partials[key] = [mf]
         osc.start();
         mf.start()
-        gainNode.gain.setTargetAtTime(currGain/2, audioCtx.currentTime, .2) //envelope attack
+        gainNode.gain.setTargetAtTime(currGain/2, audioCtx.currentTime, attack) //envelope attack
+        
+        gainNode.gain.setTargetAtTime((currGain/2)*sustain, audioCtx.currentTime + attack, decay)
 
     }
 
     function playNote(key, currGain, synthType) {
         const osc = audioCtx.createOscillator();
+        const lfo = audioCtx.createOscillator();
+        lfo.frequency.value = document.getElementById('lfoFreq').value;
+        lfo.type = document.getElementById('lfowaveform').value;
         osc.frequency.setValueAtTime(keyboardFrequencyMap[key], audioCtx.currentTime);
-        var waveform = document.getElementById('waveform').value;
         const gainNode = audioCtx.createGain();
         gainNode.gain.value = 0
-        osc.type = waveform; //choose your favorite waveform
+        osc.type = document.getElementById('waveform1').value; //choose your favorite waveform
         activeOscillators[key] = osc
         activeGains[key] = gainNode
-
+        lfo.connect(gainNode);
+        lfo.start();
+        lfos[key] = lfo;
+        var attack = timeMap[document.getElementById('attack').value];
+        var decay = timeMap[document.getElementById('decay').value];
+        var sustain = document.getElementById('sustain').value;
+        
         if (synthType == "add"){
-            additive(waveform, gainNode, currGain, key, osc)
+            additive(gainNode, currGain, key, osc, attack, decay, sustain)
         }
         else if (synthType == "am"){
-            am(waveform, gainNode, currGain, key, osc)
+            am(gainNode, currGain, key, osc, attack, decay, sustain)
         }else{ //default to fm, why? idk, vibes
-            fm(waveform, gainNode, currGain, key, osc)
+            fm(gainNode, currGain, key, osc, attack, decay, sustain)
         }
-        
 
+        funTime();
+    }
+
+    function funTime(){
+        //switch color with every new button press, press 2 to skip a color, or 3 to skip 2 etc.
+        colors = ['#345995', '#1C949D', '#03CEA4', '#41AE8B', '#7F8E71', '#BD6E57', '#FB4D3D', '#E33147', '#CA1551']
+        if (red){
+            document.body.style.color = colors[color++]
+        }else{
+            document.body.style.color = colors[color--]
+        }
+        if (color == 8){
+            red = false
+        }if (color == -1){
+            red = true
+        }
     }
 
 
