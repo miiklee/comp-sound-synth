@@ -41,8 +41,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
     activeGains = {}
     var activeNotes = 0.0
     var currGain = 1.0
-    var color = 0;
-    var red = true;
+
 
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -55,7 +54,6 @@ document.addEventListener("DOMContentLoaded", function(event) {
         const key = (event.detail || event.which).toString();
         if (keyboardFrequencyMap[key] && !activeOscillators[key]) {
             activeNotes = activeNotes + 1.0;
-            
             currGain =(1.0/activeNotes);
             sparseKeys = Object.keys(activeGains) //access only filled array elements
             if (activeNotes > 1.0){ //decrease amplitude of all existing notes to make room for new one
@@ -72,13 +70,25 @@ document.addEventListener("DOMContentLoaded", function(event) {
         if (keyboardFrequencyMap[key] && activeOscillators[key]) {
             activeGains[key].gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.7) //envelope release
             activeOscillators[key].stop(audioCtx.currentTime + 1); //actually stop oscillator
+            additiveEnd(key);
             delete activeOscillators[key];
             delete activeGains[key];
             activeNotes = activeNotes - 1.0;
         }
     }
 
-    function additive(waveform){
+    var partials = {};
+
+    function additiveEnd(key){
+        if (partials[key]){
+            for (i = 0; i < partials[key].lenth; i++){
+                partials[key][i].stop(audioCtx.currentTime + 1);
+            }
+            delete partials[key];
+        }
+    }
+
+    function additive(waveform, gainNode, currGain, key){
         //additive synthesis for a variable number of partials
         var part1 = audioCtx.createOscillator();
         var part2 = audioCtx.createOscillator();
@@ -87,48 +97,78 @@ document.addEventListener("DOMContentLoaded", function(event) {
         part1.frequency.value = 400;
         part2.frequency.value = 800;
         part3.frequency.value = 1200;
-        
-        part1.connect(globalGain);
-        part2.connect(globalGain);
-        part3.connect(globalGain);
 
         part1.type = waveform;
         part2.type = waveform;
         part3.type = waveform;
-    
+
+        part1.connect(gainNode); //new gain node for each note to control the adsr of that note
+        part2.connect(gainNode);
+        part2.connect(gainNode);
+        partials[key] = [part1, part2, part3]
+        
         part1.start()
         part2.start()
         part3.start()
+
+        osc.connect(gainNode).connect(globalGain); //new gain node for each note to control the adsr of that note
+        osc.start();
+        gainNode.gain.setTargetAtTime(currGain/4, audioCtx.currentTime, .2) //envelope attack
     }
 
 
+   function am(waveform, gainNode, currGain, key, osc){
+        mf = audioCtx.createOscillator()
+        mf.frequency.value = 101 //why not
+        mf.type = waveform
+
+        const mod = audioCtx.createGain()
+        const depth = audioCtx.createGain()
+
+        depth.gain.value = 0.5
+        mod.gain.value = 1.0 - depth.gain.value
+
+        mf.connect(depth).connect(mod.gain);
+        osc.connect(mod);
+        mod.connect(gainNode).connect(globalGain);
+
+        partials[key] = [mf]
+        osc.start();
+        mf.start()
+        gainNode.gain.setTargetAtTime(currGain/2, audioCtx.currentTime, .2) //envelope attack
+
+
+
+    }
+
     function playNote(key, currGain) {
-
-
         const osc = audioCtx.createOscillator();
         osc.frequency.setValueAtTime(keyboardFrequencyMap[key], audioCtx.currentTime);
         var waveform = document.getElementById('waveform').value;
         var synthType = document.getElementById('synthesis').value;
-        osc.type = waveform; //choose your favorite waveform
-        /*
-        if (synthType == "add"){
-            additive(waveform)
-        }
-        else if (synthType == "am"){
-            am(waveform)
-        }else{ //default to fm, why? idk, vibes
-            fm(waveform)
-        }*/
         const gainNode = audioCtx.createGain();
         gainNode.gain.value = 0
-        osc.connect(gainNode).connect(globalGain); //new gain node for each node to control the adsr of that note
+        osc.type = waveform; //choose your favorite waveform
         activeOscillators[key] = osc
         activeGains[key] = gainNode
-        osc.start();
-        gainNode.gain.setTargetAtTime(currGain, audioCtx.currentTime, .2) //envelope attack
+
+        if (synthType == "add"){
+            additive(waveform, gainNode, currGain, key)
+        }
+        else if (synthType == "am"){
+            am(waveform, gainNode, currGain, key, osc)
+        }else{ //default to fm, why? idk, vibes
+            fm(waveform)
+        }
+        
 
     }
 
-    
+
 
 })
+
+
+
+
+        
