@@ -15,4 +15,4 @@ original minimoog from the 70s.
 A fourth oscillator, LFO, is always implemented for each notes, but the waveform is toggleable in corespondance with the minimoog, and the frequency
 can range from 0 to 20Hz as input by the user.
 
-This project builds on (my digital keyboard)[https://github.com/miiklee/comp-sound-keyboard]
+This project builds on [my digital keyboard](https://github.com/miiklee/comp-sound-keyboard)
