@@ -65,6 +65,9 @@ document.addEventListener("DOMContentLoaded", function(event) {
                     else if(synthType == "am"){
                         activeGains[sparseKeys[i]].gain.setTargetAtTime(currGain/2, audioCtx.currentTime, 1);
                     }
+                    else{
+                        activeGains[sparseKeys[i]].gain.setTargetAtTime(currGain, audioCtx.currentTime, 1);
+                    }
                     
                 }
             }
@@ -77,7 +80,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
         if (keyboardFrequencyMap[key] && activeOscillators[key]) {
             activeGains[key].gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.7) //envelope release
             activeOscillators[key].stop(audioCtx.currentTime + 1); //actually stop oscillator
-            additiveEnd(key);
+            synthEnd(key);
             delete activeOscillators[key];
             delete activeGains[key];
             activeNotes = activeNotes - 1.0;
@@ -86,7 +89,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
 
     var partials = {};
 
-    function additiveEnd(key){
+    function synthEnd(key){
         if (partials[key]){
             for (let i = 0; i < partials[key].length; i++){
                 partials[key][i].stop(audioCtx.currentTime + 1);
@@ -146,6 +149,26 @@ document.addEventListener("DOMContentLoaded", function(event) {
 
     }
 
+    function fm(waveform, gainNode, currGain, key, osc){
+        mf = audioCtx.createOscillator()
+        mf.frequency.value = 101 //why not
+        mf.type = waveform
+
+        var mod = audioCtx.createGain()
+        mod.gain.value = 101
+
+        mf.connect(mod);
+        mod.connect(osc.frequency);
+        
+        osc.connect(gainNode).connect(globalGain);
+
+        partials[key] = [mf]
+        osc.start();
+        mf.start()
+        gainNode.gain.setTargetAtTime(currGain/2, audioCtx.currentTime, .2) //envelope attack
+
+    }
+
     function playNote(key, currGain, synthType) {
         const osc = audioCtx.createOscillator();
         osc.frequency.setValueAtTime(keyboardFrequencyMap[key], audioCtx.currentTime);
@@ -162,7 +185,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
         else if (synthType == "am"){
             am(waveform, gainNode, currGain, key, osc)
         }else{ //default to fm, why? idk, vibes
-            fm(waveform)
+            fm(waveform, gainNode, currGain, key, osc)
         }
         
 
