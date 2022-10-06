@@ -53,15 +53,22 @@ document.addEventListener("DOMContentLoaded", function(event) {
     function keyDown(event) {
         const key = (event.detail || event.which).toString();
         if (keyboardFrequencyMap[key] && !activeOscillators[key]) {
+            var synthType = document.getElementById('synthesis').value
             activeNotes = activeNotes + 1.0;
             currGain =(1.0/activeNotes);
             sparseKeys = Object.keys(activeGains) //access only filled array elements
             if (activeNotes > 1.0){ //decrease amplitude of all existing notes to make room for new one
                 for (let i = 0; i < sparseKeys.length; i++){
-                    activeGains[sparseKeys[i]].gain.setTargetAtTime(currGain, audioCtx.currentTime, 1);
+                    if(synthType == "add"){
+                        activeGains[sparseKeys[i]].gain.setTargetAtTime(currGain/4, audioCtx.currentTime, 1);
+                    }
+                    else if(synthType == "am"){
+                        activeGains[sparseKeys[i]].gain.setTargetAtTime(currGain/2, audioCtx.currentTime, 1);
+                    }
+                    
                 }
             }
-            playNote(key, currGain);
+            playNote(key, currGain, synthType);
         }
     }
 
@@ -81,14 +88,14 @@ document.addEventListener("DOMContentLoaded", function(event) {
 
     function additiveEnd(key){
         if (partials[key]){
-            for (i = 0; i < partials[key].lenth; i++){
+            for (let i = 0; i < partials[key].length; i++){
                 partials[key][i].stop(audioCtx.currentTime + 1);
             }
             delete partials[key];
         }
     }
 
-    function additive(waveform, gainNode, currGain, key){
+    function additive(waveform, gainNode, currGain, key, osc){
         //additive synthesis for a variable number of partials
         var part1 = audioCtx.createOscillator();
         var part2 = audioCtx.createOscillator();
@@ -137,15 +144,12 @@ document.addEventListener("DOMContentLoaded", function(event) {
         mf.start()
         gainNode.gain.setTargetAtTime(currGain/2, audioCtx.currentTime, .2) //envelope attack
 
-
-
     }
 
-    function playNote(key, currGain) {
+    function playNote(key, currGain, synthType) {
         const osc = audioCtx.createOscillator();
         osc.frequency.setValueAtTime(keyboardFrequencyMap[key], audioCtx.currentTime);
         var waveform = document.getElementById('waveform').value;
-        var synthType = document.getElementById('synthesis').value;
         const gainNode = audioCtx.createGain();
         gainNode.gain.value = 0
         osc.type = waveform; //choose your favorite waveform
@@ -153,7 +157,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
         activeGains[key] = gainNode
 
         if (synthType == "add"){
-            additive(waveform, gainNode, currGain, key)
+            additive(waveform, gainNode, currGain, key, osc)
         }
         else if (synthType == "am"){
             am(waveform, gainNode, currGain, key, osc)
